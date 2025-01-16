@@ -3,8 +3,7 @@
 This Python script allows you to create a publicly accessible Google Cloud Platform (GCP) Storage Bucket with two modes of operation:
 
 1. **Direct Creation via GCP User OAuth**
-2. **Separation of Duties**: 
-GCP User retrieves Service Account key JSON from Secret Manager, and code uses it to perform bucket operations.
+2. **Separation of Duties**: GCP User retrieves Service Account key JSON from Secret Manager, and code uses it to perform bucket operations.
 
 ---
 
@@ -15,13 +14,13 @@ Ensure the following Python libraries are installed:
 ```bash
 pip3 install -r requirements.txt
 ```
+
 ### Python Version
 This script requires **Python 3.9 or higher**. Check your Python version with:
 ```bash
 python3 --version
 ```
-If needed, [download and install Python]
-(https://www.python.org/downloads/).
+If needed, [download and install Python](https://www.python.org/downloads/).
 
 ### Configure GCP Authentication
 - **For GCP User OAuth**: 
@@ -30,18 +29,33 @@ Ensure the `gcloud` CLI is installed and configured.
   gcloud auth application-default login
   ```
 - **Separation of Duties**: 
-Ensure Service Account JSON key stored securely in [GCP Secret Manager]
-(https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets).
+Ensure Service Account JSON key is stored securely in [GCP Secret Manager](https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets).
 
 ### Required IAM Permissions
-- **For GCP User OAuth**:
-  - `roles/storage.admin` to create buckets and manage their IAM policies.
-  - `roles/secretmanager.secretAccessor` to access secrets from Secret Manager (if using Option 2).
 
-- **For Service Account**:
-  - `roles/storage.admin` to create buckets and manage IAM policies.
+#### **GCP User OAuth**
+The user account must have:
+- `storage.buckets.create`: To create buckets.
+- `storage.buckets.get`: To check bucket existence.
+- `storage.buckets.getIamPolicy`: To fetch bucket IAM policies.
+- `storage.buckets.setIamPolicy`: To set bucket IAM policies.
+- `secretmanager.secrets.get`: To access the secret in Secret Manager (if applicable).
+- `secretmanager.secretAccessor` to access secrets from Secret Manager
+- `secretmanager.versions.access`: To retrieve the secret version from Secret Manager (if applicable).
 
--------
+**Recommended Role**: Assign `roles/storage.admin` and `roles/secretmanager.secretAccessor`.
+
+#### **Service Account**
+The service account must have below granular permissions:
+- `storage.buckets.create`: To create buckets.
+- `storage.buckets.get`: To check bucket existence.
+- `storage.buckets.getIamPolicy`: To fetch bucket IAM policies.
+- `storage.buckets.setIamPolicy`: To set bucket IAM policies.
+- `secretmanager.secretAccessor` to access secrets from Secret Manager 
+
+**Recommended Role**: Assign `roles/storage.admin` to the service account.
+
+---
 
 ## Usage Instructions
 
@@ -74,12 +88,9 @@ The script will prompt you to choose one of the following options:
 ## Script Features
 
 ### Error Handling
-- **Permissions**: 
-Detects missing IAM roles (e.g., `roles/storage.admin`, `roles/secretmanager.secretAccessor`).
-- **Authentication**: 
-Prompts for `gcloud` authentication if necessary.
-- **Conflict**: 
-Handles bucket name conflicts gracefully.
+- **Permissions**: Detects missing IAM roles (e.g., `roles/storage.admin`, `roles/secretmanager.secretAccessor`) and provides actionable error messages.
+- **Authentication**: Prompts for `gcloud` authentication if necessary.
+- **Conflict**: Handles bucket name conflicts gracefully.
 
 ### Cleanup
 - Deletes temporary files (e.g., Service Account key JSON) after execution.
@@ -120,7 +131,9 @@ https://cloud.google.com/sdk/docs/install
 ```
 
 ### Permission Errors
-Ensure the user or service account has the necessary permissions listed in the [Prerequisites](#prerequisites) section.
+If you encounter permission errors, ensure the user or service account has the necessary permissions listed in the [Prerequisites](#prerequisites) section. Check the assigned roles and policies using:
+```bash
+gcloud projects get-iam-policy <PROJECT_ID>
+```
 
 ---
-
