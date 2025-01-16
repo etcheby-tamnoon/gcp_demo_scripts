@@ -4,7 +4,7 @@ This Python script allows you to create a publicly accessible Google Cloud Platf
 
 1. **Direct Creation via GCP User OAuth**
 2. **Separation of Duties**: 
-Retrieve a Service Account key JSON from Secret Manager, and uses it to perform bucket operations.
+GCP User retrieves Service Account key JSON from Secret Manager, and code uses it to perform bucket operations.
 
 ---
 
@@ -13,7 +13,7 @@ Retrieve a Service Account key JSON from Secret Manager, and uses it to perform 
 ### Install Required Libraries
 Ensure the following Python libraries are installed:
 ```bash
-pip install -r requirements.txt
+pip3 install -r requirements.txt
 ```
 ### Python Version
 This script requires **Python 3.9 or higher**. Check your Python version with:
@@ -37,6 +37,7 @@ Ensure Service Account JSON key stored securely in [GCP Secret Manager]
 - **For GCP User OAuth**:
   - `roles/storage.admin` to create buckets and manage their IAM policies.
   - `roles/secretmanager.secretAccessor` to access secrets from Secret Manager (if using Option 2).
+
 - **For Service Account**:
   - `roles/storage.admin` to create buckets and manage IAM policies.
 
@@ -50,7 +51,7 @@ Save the script to a local directory.
 ### Step 2: Execute the Script
 Run the script using Python:
 ```bash
-python <script_name>.py
+python3 <script_name>.py
 ```
 
 ### Step 3: Follow the Prompts
