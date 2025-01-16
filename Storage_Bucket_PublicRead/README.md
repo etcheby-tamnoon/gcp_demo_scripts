@@ -1,4 +1,4 @@
-# GCP Storage Bucket - Public Read Deployment Script
+# GCP Storage Bucket - Public Read Anonymous Access 
 
 This Python script allows you to create a publicly accessible Google Cloud Platform (GCP) Storage Bucket with two modes of operation:
 
