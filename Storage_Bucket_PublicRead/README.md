@@ -33,27 +33,33 @@ Ensure Service Account JSON key is stored securely in [GCP Secret Manager](https
 
 ### Required IAM Permissions
 
-#### **GCP User OAuth**
-The user account must have:
-- `storage.buckets.create`: To create buckets.
-- `storage.buckets.get`: To check bucket existence.
-- `storage.buckets.getIamPolicy`: To fetch bucket IAM policies.
-- `storage.buckets.setIamPolicy`: To set bucket IAM policies.
-- `secretmanager.secrets.get`: To access the secret in Secret Manager (if applicable).
-- `secretmanager.secretAccessor` to access secrets from Secret Manager
-- `secretmanager.versions.access`: To retrieve the secret version from Secret Manager (if applicable).
+#### **Option 1: Direct Creation via GCP User OAuth**
+The user account must have the following granular permissions:
+- **Storage Bucket Permissions**:
+  - `storage.buckets.create`: To create buckets.
+  - `storage.buckets.get`: To check bucket existence.
+  - `storage.buckets.getIamPolicy`: To fetch bucket IAM policies.
+  - `storage.buckets.setIamPolicy`: To set bucket IAM policies.
+- **Recommended Predefined Role**: Assign `roles/storage.admin`.
 
-**Recommended Role**: Assign `roles/storage.admin` and `roles/secretmanager.secretAccessor`.
+If accessing secrets from Secret Manager:
+- **Secret Manager Permissions**:
+  - `secretmanager.secrets.get`: To access the secret.
+  - `secretmanager.versions.access`: To retrieve the secret version.
+- **Recommended Predefined Role**: Assign `roles/secretmanager.secretAccessor`.
 
-#### **Service Account**
-The service account must have below granular permissions:
-- `storage.buckets.create`: To create buckets.
-- `storage.buckets.get`: To check bucket existence.
-- `storage.buckets.getIamPolicy`: To fetch bucket IAM policies.
-- `storage.buckets.setIamPolicy`: To set bucket IAM policies.
-- `secretmanager.secretAccessor` to access secrets from Secret Manager 
+#### **Option 2: Separation of Duties**
+- **For GCP User (to access Secret Manager)**:
+  - `secretmanager.secrets.get`: To access the secret.
+  - `secretmanager.versions.access`: To retrieve the secret version.
+  - **Recommended Predefined Role**: Assign `roles/secretmanager.secretAccessor`.
 
-**Recommended Role**: Assign `roles/storage.admin` to the service account.
+- **For Service Account (to manage Storage Bucket)**:
+  - `storage.buckets.create`: To create buckets.
+  - `storage.buckets.get`: To check bucket existence.
+  - `storage.buckets.getIamPolicy`: To fetch bucket IAM policies.
+  - `storage.buckets.setIamPolicy`: To set bucket IAM policies.
+  - **Recommended Predefined Role**: Assign `roles/storage.admin`.
 
 ---
 
