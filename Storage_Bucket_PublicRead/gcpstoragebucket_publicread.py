@@ -5,7 +5,7 @@ from google.cloud import storage
 from google.cloud import secretmanager
 from google.api_core.exceptions import Conflict, PermissionDenied, Forbidden, NotFound
 
-# Authentication method prompt
+# Pretty authentication method prompt
 print("""
 *****************************************************************************
 *                             Authentication Options                         *
@@ -15,7 +15,7 @@ print("""
 *                                                                           *
 * 2: Separation of duties - GCP User OAuth authenticates to retrieve the    *
 *    Secret Manager secret, and the script will use the service account     *
-*    entitlements to create the storage bucket and its policy IAM      *
+*    key JSON (secret) to create the storage bucket and its policy IAM      *
 *    binding.                                                               *
 *****************************************************************************
 """)
@@ -127,12 +127,6 @@ def create_public_bucket(bucket_name, project_id):
         # Initialize the GCP storage client
         client = storage.Client(project=project_id)
 
-        # Check if the bucket already exists
-        bucket = client.lookup_bucket(bucket_name)
-        if bucket:
-            print(f"Bucket {bucket_name} already exists.")
-            return
-
         # Create the bucket
         bucket = client.bucket(bucket_name)
         new_bucket = client.create_bucket(bucket)
@@ -157,24 +151,6 @@ def create_public_bucket(bucket_name, project_id):
             print(
                 f"Error: Forbidden from modifying IAM policies on the bucket {bucket_name}. Check your permissions.")
             exit(1)
-
-        # Set bucket to be publicly readable
-        bucket.make_public(recursive=True, future=True)
-
-        print(f"Bucket {bucket_name} is now publicly accessible.")
-        print(f"Public URL: https://storage.googleapis.com/{bucket_name}/")
-
-    except PermissionDenied:
-        print(
-            f"Error: Missing permissions to create the bucket {bucket_name}. Ensure you have 'roles/storage.admin' or appropriate permissions.")
-        exit(1)
-    except Forbidden:
-        print(
-            f"Error: Forbidden from creating the bucket {bucket_name}. Check your permissions.")
-        exit(1)
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-        exit(1)
 
         # Set bucket to be publicly readable
         bucket.make_public(recursive=True, future=True)
