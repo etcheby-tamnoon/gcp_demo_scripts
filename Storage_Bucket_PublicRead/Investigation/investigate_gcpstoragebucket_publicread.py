@@ -5,6 +5,7 @@ import os
 from google.cloud import storage
 from google.cloud import secretmanager
 from google.oauth2 import service_account
+from urllib.parse import urlparse
 
 
 def run_gcloud_auth():
@@ -31,18 +32,16 @@ def authenticate_gcp():
     temp_key_path = None
 
     if auth_method == "1":
-        # Option 1: GCP User OAuth handles everything
         try:
             subprocess.run(["gcloud", "auth", "application-default",
                            "print-access-token"], check=True, stdout=subprocess.DEVNULL)
             print("GCP User OAuth already authenticated.")
-            return None, None  # No credentials or temp key needed for this method
+            return None, None
         except subprocess.CalledProcessError:
             run_gcloud_auth()
-            return None, None  # Ensure successful re-authentication returns
+            return None, None
 
     elif auth_method == "2":
-        # Option 2: GCP OAuth + Service Account from Secret Manager
         try:
             secret_name = input(
                 "Enter the name of your Secret Manager secret: ").strip()
@@ -54,7 +53,6 @@ def authenticate_gcp():
             response = secret_client.access_secret_version(name=secret_path)
             service_account_info = response.payload.data.decode("UTF-8")
 
-            # Save the key to a temporary file
             temp_key_path = "temp_service_account_key.json"
             with open(temp_key_path, "w") as temp_key_file:
                 temp_key_file.write(service_account_info)
@@ -75,6 +73,15 @@ def authenticate_gcp():
         if temp_key_path and os.path.exists(temp_key_path):
             os.remove(temp_key_path)
         exit(1)
+
+# Normalize bucket name
+
+
+def extract_bucket_name(asset_id):
+    if asset_id.startswith("https://") or asset_id.startswith("gs://"):
+        parsed = urlparse(asset_id)
+        return parsed.netloc if parsed.netloc else parsed.path
+    return asset_id
 
 # Check overly permissive policies
 
@@ -104,69 +111,48 @@ def check_overly_permissive_policies(bucket_iam_policy):
 
 
 def investigate_buckets(credentials, input_csv, output_json):
-    # Initialize storage client
     storage_client = storage.Client(credentials=credentials)
 
-    # Read input CSV
-    projects = []
+    results = {}
     with open(input_csv, mode="r") as file:
         reader = csv.DictReader(file)
         for row in reader:
-            projects.append(row["project_id"])
+            project_id = row.get("Cloud Account ID")
+            asset_id = row.get("Cloud Asset ID")
 
-    # Initialize output data
-    result = {}
+            if not project_id or not asset_id:
+                print(f"Skipping row with missing project or asset ID: {row}")
+                continue
 
-    for project_id in projects:
-        print(f"Investigating project: {project_id}")
-        result[project_id] = []
+            bucket_name = extract_bucket_name(asset_id)
+            if project_id not in results:
+                results[project_id] = []
 
-        try:
-            buckets = storage_client.list_buckets(project=project_id)
+            try:
+                bucket = storage_client.bucket(bucket_name)
+                policy = bucket.get_iam_policy()
+                overly_permissive_bindings = check_overly_permissive_policies(
+                    policy)
 
-            for bucket in buckets:
                 bucket_info = {
-                    "bucket_name": bucket.name,
-                    "location": bucket.location,
+                    "bucket_name": bucket_name,
+                    "overly_permissive_bindings": overly_permissive_bindings,
                 }
+                results[project_id].append(bucket_info)
 
-                try:
-                    policy = bucket.get_iam_policy()
-                    overly_permissive_bindings = check_overly_permissive_policies(
-                        policy)
+            except Exception as e:
+                print(
+                    f"Error processing bucket {bucket_name} in project {project_id}: {e}")
+                results[project_id].append(
+                    {"bucket_name": bucket_name, "error": str(e)})
 
-                    if overly_permissive_bindings:
-                        bucket_info["overly_permissive_bindings"] = overly_permissive_bindings
-                    else:
-                        bucket_info["overly_permissive_bindings"] = []
-
-                except Exception as e:
-                    if "403" in str(e) or "Access Denied" in str(e):
-                        print(f"Access Denied for bucket {bucket.name}: {e}")
-                        bucket_info["error"] = "Access Denied"
-                    else:
-                        print(
-                            f"Error fetching IAM policy for bucket {bucket.name}: {e}")
-                        bucket_info["error"] = str(e)
-
-                result[project_id].append(bucket_info)
-
-        except Exception as e:
-            if "403" in str(e) or "Access Denied" in str(e):
-                print(f"Access Denied for project {project_id}: {e}")
-                result[project_id] = {"error": "Access Denied"}
-            else:
-                print(f"Error listing buckets for project {project_id}: {e}")
-                result[project_id] = {"error": str(e)}
-
-    # Write results to output JSON
     with open(output_json, "w") as json_file:
-        json.dump(result, json_file, indent=4)
+        json.dump(results, json_file, indent=4)
 
     print(f"Investigation results saved to {output_json}")
 
 
-# Usage example
+# Main execution
 if __name__ == "__main__":
     print("\nWelcome to the GCP Storage Bucket Investigation Tool")
 
