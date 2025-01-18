@@ -3,31 +3,37 @@ import json
 import subprocess
 import os
 import argparse
+import logging
 from google.cloud import storage
 from google.cloud import secretmanager
+from google.cloud import resourcemanager_v3
 from google.oauth2 import service_account
 from urllib.parse import urlparse
+
+# Configure logging
+logging.basicConfig(level=logging.INFO,
+                    format="%(asctime)s - %(levelname)s - %(message)s")
 
 
 def run_gcloud_auth():
     try:
         subprocess.run(
             ["gcloud", "auth", "application-default", "login"], check=True)
-        print("GCP User OAuth authentication successful.")
+        logging.info("GCP User OAuth authentication successful.")
     except subprocess.CalledProcessError as e:
-        print(f"Error during GCP User OAuth authentication: {e}")
+        logging.error(f"Error during GCP User OAuth authentication: {e}")
         exit(1)
 
 # Authentication function
 
 
 def authenticate_gcp():
-    print("\n" + "*" * 40)
-    print("*          GCP Authentication           *")
-    print("*" * 40 + "\n")
-    print("Select your authentication method:")
-    print("1. GCP User OAuth authentication")
-    print("2. GCP OAuth + Service Account from Secret Manager")
+    logging.info("\n" + "*" * 40)
+    logging.info("*          GCP Authentication           *")
+    logging.info("*" * 40 + "\n")
+    logging.info("Select your authentication method:")
+    logging.info("1. GCP User OAuth authentication")
+    logging.info("2. GCP OAuth + Service Account from Secret Manager")
 
     auth_method = input("Enter your choice (1 or 2): ").strip()
     temp_key_path = None
@@ -36,7 +42,7 @@ def authenticate_gcp():
         try:
             subprocess.run(["gcloud", "auth", "application-default",
                            "print-access-token"], check=True, stdout=subprocess.DEVNULL)
-            print("GCP User OAuth already authenticated.")
+            logging.info("GCP User OAuth already authenticated.")
             return None, None
         except subprocess.CalledProcessError:
             run_gcloud_auth()
@@ -60,17 +66,17 @@ def authenticate_gcp():
 
             credentials = service_account.Credentials.from_service_account_file(
                 temp_key_path)
-            print(
+            logging.info(
                 "\nAuthentication successful using Service Account from Secret Manager!")
             return credentials, temp_key_path
         except Exception as e:
-            print(f"Error during Service Account retrieval: {e}")
+            logging.error(f"Error during Service Account retrieval: {e}")
             if temp_key_path and os.path.exists(temp_key_path):
                 os.remove(temp_key_path)
             exit(1)
 
     else:
-        print("Invalid choice. Exiting.")
+        logging.error("Invalid choice. Exiting.")
         if temp_key_path and os.path.exists(temp_key_path):
             os.remove(temp_key_path)
         exit(1)
@@ -83,6 +89,40 @@ def extract_bucket_name(asset_id):
         parsed = urlparse(asset_id)
         return parsed.netloc if parsed.netloc else parsed.path
     return asset_id
+
+# Fetch project hierarchy
+
+
+def get_project_hierarchy(project_id):
+    try:
+        client = resourcemanager_v3.ProjectsClient()
+        project = client.get_project(name=f"projects/{project_id}")
+        folder_id = None
+        organization_id = None
+
+        # Extract folder or organization from the parent
+        parent = project.parent
+        if parent.startswith("folders/"):
+            folder_id = parent.split("/")[-1]
+        elif parent.startswith("organizations/"):
+            organization_id = parent.split("/")[-1]
+
+        logging.info(
+            f"Retrieved hierarchy for project {project_id}: folder_id={folder_id}, organization_id={organization_id}")
+        return {
+            "project_id": project_id,
+            "folder_id": folder_id,
+            "organization_id": organization_id,
+        }
+    except Exception as e:
+        logging.error(
+            f"Error retrieving hierarchy for project {project_id}: {e}")
+        return {
+            "project_id": project_id,
+            "folder_id": None,
+            "organization_id": None,
+            "error": str(e),
+        }
 
 # Extract specific metadata and IAM policy for a bucket
 
@@ -102,7 +142,8 @@ def extract_bucket_details(bucket):
             "locationType": raw_metadata.get("locationType"),
         }
     except Exception as e:
-        print(f"Error retrieving metadata for bucket {bucket.name}: {e}")
+        logging.error(
+            f"Error retrieving metadata for bucket {bucket.name}: {e}")
         metadata = {"error": f"Failed to fetch metadata: {str(e)}"}
 
     try:
@@ -121,7 +162,8 @@ def extract_bucket_details(bucket):
             ]
         }
     except Exception as e:
-        print(f"Error retrieving IAM policy for bucket {bucket.name}: {e}")
+        logging.error(
+            f"Error retrieving IAM policy for bucket {bucket.name}: {e}")
         iam_policy_dict = {"error": f"Failed to fetch IAM policy: {str(e)}"}
 
     return {"metadata": metadata, "iam_policy": iam_policy_dict}
@@ -139,7 +181,7 @@ def validate_csv(input_csv):
                 raise ValueError(
                     f"CSV file must contain the following headers: {required_headers}")
     except Exception as e:
-        print(f"Error validating CSV file: {e}")
+        logging.error(f"Error validating CSV file: {e}")
         exit(1)
 
 # Extract bucket metadata and IAM policies
@@ -156,25 +198,37 @@ def investigate_buckets(credentials, input_csv, output_json):
             asset_id = row.get("Cloud Asset ID")
 
             if not project_id or not asset_id:
-                print(f"Skipping row with missing project or asset ID: {row}")
+                logging.warning(
+                    f"Skipping row with missing project or asset ID: {row}")
                 continue
 
-            bucket_name = extract_bucket_name(asset_id)
+            # Query project hierarchy
+            hierarchy = get_project_hierarchy(project_id)
+            folder_id = hierarchy.get("folder_id")
+            organization_id = hierarchy.get("organization_id")
+
             if project_id not in results:
-                results[project_id] = []
+                results[project_id] = {
+                    "folder_id": folder_id,
+                    "organization_id": organization_id,
+                    "buckets": [],
+                }
 
             try:
+                bucket_name = extract_bucket_name(asset_id)
                 bucket = storage_client.bucket(bucket_name)
                 bucket_details = extract_bucket_details(bucket)
-                results[project_id].append({
+                logging.info(
+                    f"Successfully processed bucket: {bucket_name} in project: {project_id}")
+                results[project_id]["buckets"].append({
                     "bucket_name": bucket_name,
                     "details": bucket_details,
                 })
 
             except Exception as e:
-                print(
+                logging.error(
                     f"Error processing bucket {bucket_name} in project {project_id}: {e}")
-                results[project_id].append({
+                results[project_id]["buckets"].append({
                     "bucket_name": bucket_name,
                     "error": str(e),
                 })
@@ -182,7 +236,7 @@ def investigate_buckets(credentials, input_csv, output_json):
     with open(output_json, "w") as json_file:
         json.dump(results, json_file, indent=4)
 
-    print(f"Investigation results saved to {output_json}")
+    logging.info(f"Investigation results saved to {output_json}")
 
 
 # Main execution
@@ -195,7 +249,7 @@ if __name__ == "__main__":
 
     validate_csv(args.csv)
 
-    print("\nWelcome to the GCP Storage Bucket Investigation Tool")
+    logging.info("\nWelcome to the GCP Storage Bucket Investigation Tool")
 
     credentials, temp_key_path = authenticate_gcp()
 
@@ -207,4 +261,4 @@ if __name__ == "__main__":
     finally:
         if temp_key_path and os.path.exists(temp_key_path):
             os.remove(temp_key_path)
-            print(f"Temporary file {temp_key_path} deleted.")
+            logging.info(f"Temporary file {temp_key_path} deleted.")
