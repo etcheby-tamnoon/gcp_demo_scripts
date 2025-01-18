@@ -1,6 +1,22 @@
 # GCP Storage Bucket - Public Read Anonymous Access 
 
-This Python script allows you to create a publicly accessible Google Cloud Platform (GCP) Storage Bucket with two modes of operation:
+This Python script allows you to create a publicly accessible Google Cloud Platform (GCP) with role IAM
+binding below: 
+```json
+{
+  "role": "roles/storage.objectViewer",
+  "members": [
+    "allUsers"
+  ]
+}
+```
+
+Script specifically grants one bucket-level permission `roles/storage.objectViewer` to everyone on the internet `(allUsers)`, making all read requests anonymous.  
+Per GCP Documentation, Storage Bucket Public Access also applies to anyone signed into a Google account `(allAuthenticatedUsers)` if listed as member on the bucket role IAM binding. 
+
+(https://cloud.google.com/storage/docs/cloud-console?_gl=1*10s4kvs*_ga*OTU0ODMwNDA1LjE3MzU1NzU5MDE.*_ga_WH2QY8WWF5*MTczNzE3MDA2Ni4yOC4xLjE3MzcxNzI0NTIuNTAuMC4w#_sharingdata)
+
+Storage Bucket with two modes of operation:
 
 1. **Direct Creation via GCP User OAuth**
 2. **Separation of Duties**: GCP User retrieves Service Account key JSON from Secret Manager, and code uses it to perform bucket operations.
