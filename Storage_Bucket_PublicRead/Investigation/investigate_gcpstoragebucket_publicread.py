@@ -27,7 +27,7 @@ def run_gcloud_auth():
 # Authentication function
 
 
-def authenticate_gcp():
+def authenticate_gcp(secret_name=None, secret_project_id=None):
     logging.info("\n" + "*" * 40)
     logging.info("*          GCP Authentication           *")
     logging.info("*" * 40 + "\n")
@@ -50,13 +50,14 @@ def authenticate_gcp():
 
     elif auth_method == "2":
         try:
-            secret_name = input(
-                "Enter the name of your Secret Manager secret: ").strip()
-            project_id = input(
-                "Enter the project ID containing the secret: ").strip()
+            if not secret_name or not secret_project_id:
+                secret_name = input(
+                    "Enter the name of your Secret Manager secret: ").strip()
+                secret_project_id = input(
+                    "Enter the project ID containing the secret: ").strip()
 
             secret_client = secretmanager.SecretManagerServiceClient()
-            secret_path = f"projects/{project_id}/secrets/{secret_name}/versions/latest"
+            secret_path = f"projects/{secret_project_id}/secrets/{secret_name}/versions/latest"
             response = secret_client.access_secret_version(name=secret_path)
             service_account_info = response.payload.data.decode("UTF-8")
 
@@ -245,13 +246,20 @@ if __name__ == "__main__":
         description="GCP Storage Bucket Investigation Tool")
     parser.add_argument("--csv", type=str, required=True,
                         help="Path to the input CSV file containing Cloud Account ID and Cloud Asset ID columns.")
+    parser.add_argument("--secret-name", type=str,
+                        help="Name of the GCP Secret for Service Account authentication (optional).")
+    parser.add_argument("--secret-project-id", type=str,
+                        help="GCP Project ID where the secret is stored (optional).")
+
     args = parser.parse_args()
 
     validate_csv(args.csv)
 
     logging.info("\nWelcome to the GCP Storage Bucket Investigation Tool")
 
-    credentials, temp_key_path = authenticate_gcp()
+    # Pass the secret name and project ID to the authentication function
+    credentials, temp_key_path = authenticate_gcp(
+        secret_name=args.secret_name, secret_project_id=args.secret_project_id)
 
     try:
         input_csv = args.csv
