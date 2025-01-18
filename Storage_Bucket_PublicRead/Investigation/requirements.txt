@@ -1,3 +1,4 @@
-google-cloud-storage
-google-cloud-secret-manager
-google-auth-oauthlib
+google-cloud-storage==2.10.0
+google-cloud-secret-manager==2.16.1
+google-api-core==2.11.0
+google-cloud-resource-manager==1.10.0
