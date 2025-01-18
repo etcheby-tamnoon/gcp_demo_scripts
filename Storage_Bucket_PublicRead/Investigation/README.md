@@ -1,13 +1,19 @@
-# GCP Storage Bucket Public Read Investigation Tool
+# GCP Storage Bucket(s) Public Read Investigation Tool
 
 ## Overview
-The **GCP Storage Bucket Public Read Investigation Tool** is a Python script designed to identify GCP storage buckets that have overly permissive IAM bindings allowing public read access. It provides a detailed investigation of storage buckets across multiple GCP projects and outputs the results in a JSON file.
+The **GCP Storage Bucket Public Read Investigation Tool** is a Python script designed to identify GCP storage buckets that have overly permissive IAM bindings allowing public/anonymous read access. 
+It provides a detailed investigation of storage buckets across multiple GCP projects and outputs the results in a JSON file.
 
 ## Features
-- **Authentication Options**:
+- **GCP Authentication Options**:
   - GCP User OAuth authentication (using `gcloud` CLI).
   - Service Account JSON key retrieval from Google Secret Manager.
-- Detects IAM bindings granting public read access (`roles/storage.objectViewer`, `roles/storage.legacyBucketReader`, etc.) to `allUsers` or `allAuthenticatedUsers`.
+
+- **Script Flow**:
+- From Tamnoon Alerts CSV export, parses Cloud Account ID (Project ID) & Cloud Asset Name (Storage Bucket Name) columns values 
+- For each Project ID, runs Gcloud commands to describe GCP Storage Buckets IAM bindings granting anonymous public read access 
+- Checks whether Bucket Policy IAM Bindings includes
+(`roles/storage.objectViewer`, `roles/storage.legacyBucketReader`, etc.) to `allUsers` or `allAuthenticatedUsers`.
 - Provides a JSON report summarizing findings per GCP project.
 - Handles exceptions such as permission errors and invalid configurations.
 - Securely handles temporary files for Service Account JSON keys.
@@ -16,7 +22,7 @@ The **GCP Storage Bucket Public Read Investigation Tool** is a Python script des
 1. **Python Environment**: Ensure Python 3.7 or higher is installed.
 2. **Dependencies**: Install required Python libraries using the provided `requirements.txt` file:
    ```bash
-   pip install -r requirements.txt
+   pip3 install -r requirements.txt
    ```
 3. **gcloud CLI**: Install and configure the Google Cloud SDK (`gcloud`) for OAuth authentication.
 4. **Service Account**: For authentication via Secret Manager, ensure a Service Account with the necessary permissions is created and stored in Secret Manager.
@@ -36,7 +42,7 @@ The **GCP Storage Bucket Public Read Investigation Tool** is a Python script des
   - `storage.buckets.get`
   - `storage.buckets.getIamPolicy`
   - `resourcemanager.projects.get`
-- The user executing the script must have permissions to access the secret in Secret Manager:
+- The GCP user executing the script must also have permissions to access the secret in Secret Manager:
   - `secretmanager.secrets.access`
   - `secretmanager.versions.access`
   - `secretmanager.secrets.get`
@@ -47,7 +53,7 @@ The **GCP Storage Bucket Public Read Investigation Tool** is a Python script des
 - **Error Handling**: Logs errors related to permission issues or invalid configurations.
 
 ## Input
-- **CSV File**: A CSV file containing a `project_id` column with GCP project IDs to investigate.
+- **CSV File**: CSV export from Tamnoon's Alerts with `Cloud Account ID (Project ID)` & `Cloud Asset Name (Storage Bucket Name)` columns for script to investigate.
 
 ## Output
 - **JSON Report**: The script generates a JSON file (`public_bucket_read_investigation.json`) containing the following details:

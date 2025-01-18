@@ -1,0 +1,33 @@
+{
+    "evident-plane-424101-h3": [
+        {
+            "bucket_name": "etcheby-test_publicread",
+            "details": {
+                "metadata": {
+                    "kind": "storage#bucket",
+                    "selfLink": "https://www.googleapis.com/storage/v1/b/etcheby-test_publicread",
+                    "storageClass": "STANDARD",
+                    "uniformBucketLevelAccess": false,
+                    "publicAccessPrevention": "inherited",
+                    "locationType": "multi-region"
+                },
+                "iam_policy": {
+                    "bindings": [
+                        {
+                            "role": "roles/storage.legacyBucketReader",
+                            "members": [
+                                "allUsers"
+                            ]
+                        },
+                        {
+                            "role": "roles/storage.objectViewer",
+                            "members": [
+                                "allUsers"
+                            ]
+                        }
+                    ]
+                }
+            }
+        }
+    ]
+}

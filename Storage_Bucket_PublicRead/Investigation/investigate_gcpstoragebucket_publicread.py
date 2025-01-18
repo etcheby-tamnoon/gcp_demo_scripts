@@ -2,6 +2,7 @@ import csv
 import json
 import subprocess
 import os
+import argparse
 from google.cloud import storage
 from google.cloud import secretmanager
 from google.oauth2 import service_account
@@ -83,29 +84,63 @@ def extract_bucket_name(asset_id):
         return parsed.netloc if parsed.netloc else parsed.path
     return asset_id
 
-# Check overly permissive policies
+# Extract specific metadata and IAM policy for a bucket
 
 
-def check_overly_permissive_policies(bucket_iam_policy):
-    overly_permissive_roles = [
-        {"role": "roles/storage.objectViewer",
-            "members": ["allUsers", "allAuthenticatedUsers"]},
-        {"role": "roles/storage.legacyBucketReader",
-            "members": ["allUsers", "allAuthenticatedUsers"]},
-        {"role": "roles/storage.legacyBucketWriter",
-            "members": ["allUsers", "allAuthenticatedUsers"]},
-    ]
+def extract_bucket_details(bucket):
+    try:
+        bucket.reload()  # Fetch the latest metadata
+        raw_metadata = bucket._properties  # Full bucket metadata
 
-    overly_permissive_bindings = []
+        # Extract only required fields from metadata
+        metadata = {
+            "kind": raw_metadata.get("kind"),
+            "selfLink": raw_metadata.get("selfLink"),
+            "storageClass": raw_metadata.get("storageClass"),
+            "uniformBucketLevelAccess": raw_metadata.get("iamConfiguration", {}).get("uniformBucketLevelAccess", {}).get("enabled"),
+            "publicAccessPrevention": raw_metadata.get("iamConfiguration", {}).get("publicAccessPrevention"),
+            "locationType": raw_metadata.get("locationType"),
+        }
+    except Exception as e:
+        print(f"Error retrieving metadata for bucket {bucket.name}: {e}")
+        metadata = {"error": f"Failed to fetch metadata: {str(e)}"}
 
-    for binding in bucket_iam_policy.get("bindings", []):
-        for overly_permissive_role in overly_permissive_roles:
-            if binding["role"] == overly_permissive_role["role"] and any(
-                member in binding["members"] for member in overly_permissive_role["members"]
-            ):
-                overly_permissive_bindings.append(binding)
+    try:
+        # Explicitly request IAM policy version 3
+        iam_policy = bucket.get_iam_policy(requested_policy_version=3)
+        iam_policy_dict = {
+            "bindings": [
+                {
+                    "role": binding["role"],
+                    "members": [
+                        member for member in binding["members"] if member in {"allUsers", "allAuthenticatedUsers"}
+                    ],
+                }
+                for binding in iam_policy.bindings
+                if any(member in {"allUsers", "allAuthenticatedUsers"} for member in binding["members"])
+            ]
+        }
+    except Exception as e:
+        print(f"Error retrieving IAM policy for bucket {bucket.name}: {e}")
+        iam_policy_dict = {"error": f"Failed to fetch IAM policy: {str(e)}"}
 
-    return overly_permissive_bindings
+    return {"metadata": metadata, "iam_policy": iam_policy_dict}
+
+# Validate CSV file
+
+
+def validate_csv(input_csv):
+    required_headers = {"Cloud Account ID", "Cloud Asset ID"}
+    try:
+        with open(input_csv, mode="r") as file:
+            reader = csv.DictReader(file)
+            headers = set(reader.fieldnames)
+            if not required_headers.issubset(headers):
+                raise ValueError(
+                    f"CSV file must contain the following headers: {required_headers}")
+    except Exception as e:
+        print(f"Error validating CSV file: {e}")
+        exit(1)
 
 # Extract bucket metadata and IAM policies
 
@@ -130,21 +165,19 @@ def investigate_buckets(credentials, input_csv, output_json):
 
             try:
                 bucket = storage_client.bucket(bucket_name)
-                policy = bucket.get_iam_policy()
-                overly_permissive_bindings = check_overly_permissive_policies(
-                    policy)
-
-                bucket_info = {
+                bucket_details = extract_bucket_details(bucket)
+                results[project_id].append({
                     "bucket_name": bucket_name,
-                    "overly_permissive_bindings": overly_permissive_bindings,
-                }
-                results[project_id].append(bucket_info)
+                    "details": bucket_details,
+                })
 
             except Exception as e:
                 print(
                     f"Error processing bucket {bucket_name} in project {project_id}: {e}")
-                results[project_id].append(
-                    {"bucket_name": bucket_name, "error": str(e)})
+                results[project_id].append({
+                    "bucket_name": bucket_name,
+                    "error": str(e),
+                })
 
     with open(output_json, "w") as json_file:
         json.dump(results, json_file, indent=4)
@@ -154,12 +187,20 @@ def investigate_buckets(credentials, input_csv, output_json):
 
 # Main execution
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="GCP Storage Bucket Investigation Tool")
+    parser.add_argument("--csv", type=str, required=True,
+                        help="Path to the input CSV file containing Cloud Account ID and Cloud Asset ID columns.")
+    args = parser.parse_args()
+
+    validate_csv(args.csv)
+
     print("\nWelcome to the GCP Storage Bucket Investigation Tool")
 
     credentials, temp_key_path = authenticate_gcp()
 
     try:
-        input_csv = input("Enter the full path to your CSV file: ").strip()
+        input_csv = args.csv
         output_json = "public_bucket_read_investigation.json"
 
         investigate_buckets(credentials, input_csv, output_json)
