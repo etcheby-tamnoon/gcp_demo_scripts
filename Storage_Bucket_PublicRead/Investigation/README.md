@@ -1,23 +1,21 @@
-# GCP Storage Bucket(s) Public Read Investigation Tool
+# GCP Storage Bucket(s): Anonymous Public Read - Investigation Tool
 ![Tool Logo](images/Tamnoon.png)
 
 ## Overview
-The **GCP Storage Bucket Public Read Investigation Tool** is a Python script designed to identify GCP storage buckets that have overly permissive IAM bindings allowing public/anonymous read access.
-It provides a detailed investigation of storage buckets across multiple GCP projects and outputs the results in a JSON file.
+The **GCP Storage Bucket(s): Anonymous Public Read - Investigation Tool** is a Python script designed to identify GCP storage buckets that have overly permissive IAM bindings allowing public/anonymous read access. It provides a detailed investigation of storage buckets across multiple GCP projects and outputs the results in both JSON and CSV formats, along with a terminal-displayed summary table.
 
 ## Features
 - **GCP Authentication Options**:
   - GCP User OAuth authentication (using `gcloud` CLI).
   - Service Account JSON key retrieval from Google Secret Manager, with the ability to specify secret name and project ID via command-line arguments.
-
 - **Script Flow**:
-  - From Tamnoon Alerts CSV export, parses `Cloud Account ID (Project ID)` & `Cloud Asset Name (Storage Bucket Name)` column values.
-  - Queries GCP storage buckets using the GCP API to retrieve metadata and IAM policies.
+  - Parses `Cloud Account ID (Project ID)` & `Cloud Asset Name (Storage Bucket Name)` column values from Tamnoon Alerts CSV export.
+  - Queries GCP storage buckets to retrieve metadata and IAM policies.
   - Identifies overly permissive IAM bindings (`roles/storage.objectViewer`, `roles/storage.legacyBucketReader`, etc.) granting access to `allUsers` or `allAuthenticatedUsers`.
-  - Provides a JSON report summarizing findings per GCP project.
   - Includes additional project-level details like folder and organization hierarchy.
-  - Handles exceptions such as permission errors and invalid configurations.
+  - Outputs findings in both JSON and CSV formats, with a human-readable summary table displayed in the terminal.
   - Securely manages temporary files for Service Account JSON keys.
+  - Offers a `--debug` mode for detailed logging during execution.
 
 ## Prerequisites
 1. **Python Environment**: Ensure Python 3.7 or higher is installed.
@@ -49,7 +47,7 @@ It provides a detailed investigation of storage buckets across multiple GCP proj
   - `secretmanager.secrets.get`
 
 ### Additional Features
-- **Project Hierarchy Retrieval**: Queries the GCP organizational hierarchy to include folder and organization details for each project.
+- **Project Hierarchy Retrieval**: Queries the GCP organizational hierarchy to include folder and organization details for each project. This requires the following permissions: `resourcemanager.folders.get` and `resourcemanager.organizations.get`. These permissions ensure the script can fetch hierarchical details like folder and organization IDs.
 - **Bucket Scanning**: The script lists buckets in each project specified in the input CSV file.
 - **Policy Analysis**: Examines IAM bindings to detect public read access permissions.
 - **Error Handling**: Logs errors related to permission issues or invalid configurations.
@@ -69,6 +67,14 @@ It provides a detailed investigation of storage buckets across multiple GCP proj
       - `kind`, `selfLink`, `storageClass`, `uniformBucketLevelAccess`, `publicAccessPrevention`, `locationType`.
     - `iam_policy`: IAM bindings granting public access to `allUsers` or `allAuthenticatedUsers`.
     - `error` (if any): Describes permission or access issues.
+- **CSV Summary Table**: The script generates a CSV file (`summary_table.csv`) summarizing findings:
+  - **Columns**:
+    - Folder Name/ID
+    - Project Name/ID
+    - Bucket Name
+    - Permissions
+    - Exposure Match
+- **Terminal Summary Table**: Displays a human-readable summary table of findings.
 
 ## How to Run
 1. Clone the repository and navigate to the script directory.
@@ -76,19 +82,26 @@ It provides a detailed investigation of storage buckets across multiple GCP proj
 3. Run the script with one of the following options:
 
    - **Option 1**: Authenticate using `gcloud` CLI:
+
+   ![Tool Logo](images/option1.png)
      ```bash
      python3 investigate_gcpstoragebucket_publicread.py --csv /path/to/csv_file.csv
      ```
-![Tool Logo](images/option1.png)
 
    - **Option 2**: Authenticate using a Service Account JSON key retrieved from Secret Manager:
+
+   ![Tool Logo](images/option2.png)
      ```bash
      python3 investigate_gcpstoragebucket_publicread.py --csv /path/to/csv_file.csv --secret-name my-secret --secret-project-id my-project-id
      ```
-![Tool Logo](images/option2.png)
 
-4. Follow the prompts for any additional input if required.
-5. The results will be saved to `public_bucket_read_investigation.json`.
+4. Use the `--debug` flag for verbose logging during execution:
+   ```bash
+   python3 investigate_gcpstoragebucket_publicread.py --csv /path/to/csv_file.csv --debug
+   ```
+
+5. Follow the prompts for any additional input if required.
+6. The results will be saved to `public_bucket_read_investigation.json` and `summary_table.csv`.
 
 ## Example JSON Output
 ```json

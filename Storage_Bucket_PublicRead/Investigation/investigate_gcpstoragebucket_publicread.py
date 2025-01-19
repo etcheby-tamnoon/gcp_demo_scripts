@@ -9,14 +9,18 @@ from google.cloud import secretmanager
 from google.cloud import resourcemanager_v3
 from google.oauth2 import service_account
 from urllib.parse import urlparse
+import pandas as pd
+from tabulate import tabulate
 
 # Configure logging
-logging.basicConfig(level=logging.INFO,
+DEFAULT_LOG_LEVEL = logging.INFO
+logging.basicConfig(level=DEFAULT_LOG_LEVEL,
                     format="%(asctime)s - %(levelname)s - %(message)s")
 
 
 def run_gcloud_auth():
     try:
+        logging.debug("Starting GCP OAuth authentication using gcloud CLI.")
         subprocess.run(
             ["gcloud", "auth", "application-default", "login"], check=True)
         logging.info("GCP User OAuth authentication successful.")
@@ -24,10 +28,9 @@ def run_gcloud_auth():
         logging.error(f"Error during GCP User OAuth authentication: {e}")
         exit(1)
 
-# Authentication function
-
 
 def authenticate_gcp(secret_name=None, secret_project_id=None):
+    logging.debug("Starting authentication process.")
     logging.info("\n" + "*" * 40)
     logging.info("*          GCP Authentication           *")
     logging.info("*" * 40 + "\n")
@@ -40,16 +43,20 @@ def authenticate_gcp(secret_name=None, secret_project_id=None):
 
     if auth_method == "1":
         try:
+            logging.debug("Checking existing GCP User OAuth authentication.")
             subprocess.run(["gcloud", "auth", "application-default",
                            "print-access-token"], check=True, stdout=subprocess.DEVNULL)
             logging.info("GCP User OAuth already authenticated.")
             return None, None
         except subprocess.CalledProcessError:
+            logging.debug(
+                "No existing OAuth authentication found. Starting new login.")
             run_gcloud_auth()
             return None, None
 
     elif auth_method == "2":
         try:
+            logging.debug("Using Service Account from Secret Manager.")
             if not secret_name or not secret_project_id:
                 secret_name = input(
                     "Enter the name of your Secret Manager secret: ").strip()
@@ -82,26 +89,24 @@ def authenticate_gcp(secret_name=None, secret_project_id=None):
             os.remove(temp_key_path)
         exit(1)
 
-# Normalize bucket name
-
 
 def extract_bucket_name(asset_id):
+    logging.debug(f"Extracting bucket name from asset ID: {asset_id}")
     if asset_id.startswith("https://") or asset_id.startswith("gs://"):
         parsed = urlparse(asset_id)
         return parsed.netloc if parsed.netloc else parsed.path
     return asset_id
 
-# Fetch project hierarchy
-
 
 def get_project_hierarchy(project_id):
     try:
+        logging.debug(
+            f"Fetching project hierarchy for project ID: {project_id}")
         client = resourcemanager_v3.ProjectsClient()
         project = client.get_project(name=f"projects/{project_id}")
         folder_id = None
         organization_id = None
 
-        # Extract folder or organization from the parent
         parent = project.parent
         if parent.startswith("folders/"):
             folder_id = parent.split("/")[-1]
@@ -125,15 +130,12 @@ def get_project_hierarchy(project_id):
             "error": str(e),
         }
 
-# Extract specific metadata and IAM policy for a bucket
-
 
 def extract_bucket_details(bucket):
+    logging.debug(f"Extracting details for bucket: {bucket.name}")
     try:
-        bucket.reload()  # Fetch the latest metadata
-        raw_metadata = bucket._properties  # Full bucket metadata
-
-        # Extract only required fields from metadata
+        bucket.reload()
+        raw_metadata = bucket._properties
         metadata = {
             "kind": raw_metadata.get("kind"),
             "selfLink": raw_metadata.get("selfLink"),
@@ -148,7 +150,6 @@ def extract_bucket_details(bucket):
         metadata = {"error": f"Failed to fetch metadata: {str(e)}"}
 
     try:
-        # Explicitly request IAM policy version 3
         iam_policy = bucket.get_iam_policy(requested_policy_version=3)
         iam_policy_dict = {
             "bindings": [
@@ -162,6 +163,8 @@ def extract_bucket_details(bucket):
                 if any(member in {"allUsers", "allAuthenticatedUsers"} for member in binding["members"])
             ]
         }
+        logging.debug(
+            f"IAM policy for bucket {bucket.name}: {iam_policy_dict}")
     except Exception as e:
         logging.error(
             f"Error retrieving IAM policy for bucket {bucket.name}: {e}")
@@ -169,12 +172,11 @@ def extract_bucket_details(bucket):
 
     return {"metadata": metadata, "iam_policy": iam_policy_dict}
 
-# Validate CSV file
-
 
 def validate_csv(input_csv):
     required_headers = {"Cloud Account ID", "Cloud Asset ID"}
     try:
+        logging.debug("Validating input CSV file.")
         with open(input_csv, mode="r") as file:
             reader = csv.DictReader(file)
             headers = set(reader.fieldnames)
@@ -185,10 +187,46 @@ def validate_csv(input_csv):
         logging.error(f"Error validating CSV file: {e}")
         exit(1)
 
-# Extract bucket metadata and IAM policies
+
+def generate_summary_table(results, output_table_csv, display_in_terminal=False):
+    summary_data = []
+
+    for project_id, project_data in results.items():
+        folder_id = project_data.get("folder_id", "N/A")
+        for bucket in project_data.get("buckets", []):
+            bucket_name = bucket.get("bucket_name", "Unknown")
+            permissions = bucket.get("details", {}).get(
+                "iam_policy", {}).get("bindings", [])
+            metadata_permissions = [
+                f"{binding['role']}: {', '.join(binding['members'])}"
+                for binding in permissions
+                if binding.get("members")
+            ]
+            overly_permissive_bindings = bucket.get("details", {}).get(
+                "iam_policy", {}).get("bindings", [])
+            exposure_match = "Yes" if overly_permissive_bindings else "No"
+            if overly_permissive_bindings and not metadata_permissions:
+                exposure_match = "Discrepancy"
+
+            summary_data.append({
+                "Folder Name/ID": folder_id,
+                "Project Name/ID": project_id,
+                "Bucket Name": bucket_name,
+                "Permissions": "; ".join(metadata_permissions) if metadata_permissions else "None",
+                "Exposure Match": exposure_match
+            })
+
+    df = pd.DataFrame(summary_data)
+    df.to_csv(output_table_csv, index=False)
+    logging.info(f"Summary table saved to {output_table_csv}")
+
+    if display_in_terminal:
+        print("\nSummary Table:\n")
+        print(tabulate(summary_data, headers="keys", tablefmt="grid"))
 
 
 def investigate_buckets(credentials, input_csv, output_json):
+    logging.debug("Starting bucket investigation.")
     storage_client = storage.Client(credentials=credentials)
 
     results = {}
@@ -203,7 +241,6 @@ def investigate_buckets(credentials, input_csv, output_json):
                     f"Skipping row with missing project or asset ID: {row}")
                 continue
 
-            # Query project hierarchy
             hierarchy = get_project_hierarchy(project_id)
             folder_id = hierarchy.get("folder_id")
             organization_id = hierarchy.get("organization_id")
@@ -240,33 +277,49 @@ def investigate_buckets(credentials, input_csv, output_json):
     logging.info(f"Investigation results saved to {output_json}")
 
 
-# Main execution
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="GCP Storage Bucket Anonymous Public Read Investigation Tool")
-    parser.add_argument("--csv", type=str, required=True,
-                        help="Path to the input CSV file containing Cloud Account ID and Cloud Asset ID columns.")
-    parser.add_argument("--secret-name", type=str,
-                        help="Name of the GCP Secret for Service Account authentication (optional).")
-    parser.add_argument("--secret-project-id", type=str,
-                        help="GCP Project ID where the secret is stored (optional).")
-
-    args = parser.parse_args()
-
-    validate_csv(args.csv)
-
-    logging.info("\nWelcome to the GCP Storage Bucket Investigation Tool")
-
-    # Pass the secret name and project ID to the authentication function
-    credentials, temp_key_path = authenticate_gcp(
-        secret_name=args.secret_name, secret_project_id=args.secret_project_id)
-
     try:
-        input_csv = args.csv
-        output_json = "public_bucket_read_investigation.json"
+        parser = argparse.ArgumentParser(
+            description="GCP Storage Bucket Investigation Tool")
+        parser.add_argument("--csv", type=str, required=True,
+                            help="Path to the input CSV file containing Cloud Account ID and Cloud Asset ID columns.")
+        parser.add_argument("--secret-name", type=str,
+                            help="Name of the GCP Secret for Service Account authentication (optional).")
+        parser.add_argument("--secret-project-id", type=str,
+                            help="GCP Project ID where the secret is stored (optional).")
+        parser.add_argument("--debug", action="store_true",
+                            help="Enable debug-level logging.")
 
-        investigate_buckets(credentials, input_csv, output_json)
-    finally:
-        if temp_key_path and os.path.exists(temp_key_path):
-            os.remove(temp_key_path)
-            logging.info(f"Temporary file {temp_key_path} deleted.")
+        args = parser.parse_args()
+
+        # Set log level based on --debug flag
+        if args.debug:
+            logging.getLogger().setLevel(logging.DEBUG)
+        else:
+            logging.getLogger().setLevel(logging.INFO)
+
+        validate_csv(args.csv)
+
+        logging.info("\nWelcome to the GCP Storage Bucket Investigation Tool")
+
+        credentials, temp_key_path = authenticate_gcp(
+            secret_name=args.secret_name, secret_project_id=args.secret_project_id)
+
+        try:
+            input_csv = args.csv
+            output_json = "public_bucket_read_investigation.json"
+            output_table_csv = "summary_table.csv"
+
+            investigate_buckets(credentials, input_csv, output_json)
+
+            with open(output_json, "r") as json_file:
+                results = json.load(json_file)
+                generate_summary_table(
+                    results, output_table_csv, display_in_terminal=True)
+        finally:
+            if temp_key_path and os.path.exists(temp_key_path):
+                os.remove(temp_key_path)
+                logging.info(f"Temporary file {temp_key_path} deleted.")
+    except Exception as e:
+        logging.error(f"Unhandled exception: {e}")
+        raise
