@@ -75,6 +75,18 @@ The **GCP Storage Bucket(s): Anonymous Public Read - Investigation Tool** is a P
     - Permissions
     - Exposure Match
 
+Note: **Exposure Match** column indicates whether the IAM permissions observed in the bucket’s metadata match the public exposure issues flagged in the input CSV file from CNAAP Alerts. It serves as a validation to confirm if the reported issue(s) align with the current IAM policy configuration.
+
+Possible Values:
+	1.	Yes:
+	•	Indicates that the IAM bindings granting public access (allUsers or allAuthenticatedUsers) match the issues reported in the input CSV.
+	2.	No:
+	•	Indicates no IAM bindings granting public access (allUsers or allAuthenticatedUsers) were found for the bucket.
+	3.	Discrepancy:
+	•	Indicates a mismatch between the reported issues in the input CSV and the IAM policy fetched from the bucket’s metadata.
+	•	For example, public exposure may be flagged in the CSV, but the current IAM policy shows no such permissions.
+
+
 - **Terminal Summary Table**: Displays a human-readable summary table of findings.
 
 ## How to Run
