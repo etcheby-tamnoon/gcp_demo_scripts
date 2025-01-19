@@ -79,11 +79,13 @@ It provides a detailed investigation of storage buckets across multiple GCP proj
      ```bash
      python3 investigate_gcpstoragebucket_publicread.py --csv /path/to/csv_file.csv
      ```
+![Tool Logo](images/option1.png)
 
    - **Option 2**: Authenticate using a Service Account JSON key retrieved from Secret Manager:
      ```bash
      python3 investigate_gcpstoragebucket_publicread.py --csv /path/to/csv_file.csv --secret-name my-secret --secret-project-id my-project-id
      ```
+![Tool Logo](images/option2.png)
 
 4. Follow the prompts for any additional input if required.
 5. The results will be saved to `public_bucket_read_investigation.json`.

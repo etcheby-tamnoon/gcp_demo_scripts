@@ -243,7 +243,7 @@ def investigate_buckets(credentials, input_csv, output_json):
 # Main execution
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="GCP Storage Bucket Investigation Tool")
+        description="GCP Storage Bucket Anonymous Public Read Investigation Tool")
     parser.add_argument("--csv", type=str, required=True,
                         help="Path to the input CSV file containing Cloud Account ID and Cloud Asset ID columns.")
     parser.add_argument("--secret-name", type=str,
