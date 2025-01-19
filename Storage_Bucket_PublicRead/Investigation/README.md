@@ -74,31 +74,33 @@ The **GCP Storage Bucket(s): Anonymous Public Read - Investigation Tool** is a P
     - Bucket Name
     - Permissions
     - Exposure Match
+
 - **Terminal Summary Table**: Displays a human-readable summary table of findings.
 
 ## How to Run
 1. Clone the repository and navigate to the script directory.
-2. Prepare the input CSV file with `Cloud Account ID (Project ID)` and `Cloud Asset Name (Storage Bucket Name)` columns.
+2. Prepare Tamnoon's Alerts input CSV file with `Cloud Account ID (Project ID)` and `Cloud Asset Name (Storage Bucket Name)` columns.
 3. Run the script with one of the following options:
 
    - **Option 1**: Authenticate using `gcloud` CLI:
 
-   ![Tool Logo](images/option1.png)
      ```bash
      python3 investigate_gcpstoragebucket_publicread.py --csv /path/to/csv_file.csv
      ```
+   ![Tool Logo](images/option1.png)
 
    - **Option 2**: Authenticate using a Service Account JSON key retrieved from Secret Manager:
 
-   ![Tool Logo](images/option2.png)
      ```bash
      python3 investigate_gcpstoragebucket_publicread.py --csv /path/to/csv_file.csv --secret-name my-secret --secret-project-id my-project-id
      ```
+   ![Tool Logo](images/option2.png)
 
 4. Use the `--debug` flag for verbose logging during execution:
    ```bash
    python3 investigate_gcpstoragebucket_publicread.py --csv /path/to/csv_file.csv --debug
    ```
+    ![Tool Logo](images/debug.png)
 
 5. Follow the prompts for any additional input if required.
 6. The results will be saved to `public_bucket_read_investigation.json` and `summary_table.csv`.
@@ -133,6 +135,9 @@ The **GCP Storage Bucket(s): Anonymous Public Read - Investigation Tool** is a P
   }
 }
 ```
+
+## Example summary_table.csv Output
+![Tool Logo](images/summary_table.png)
 
 ## Security Considerations
 - **Temporary Files**: The script securely handles temporary files for Service Account JSON keys and deletes them immediately after use.

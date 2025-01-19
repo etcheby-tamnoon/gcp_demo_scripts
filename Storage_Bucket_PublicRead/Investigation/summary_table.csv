@@ -1,0 +1,2 @@
+Folder Name/ID,Project Name/ID,Bucket Name,Permissions,Exposure Match
+189353018633,evident-plane-424101-h3,etcheby-test_publicread,roles/storage.legacyBucketReader: allUsers; roles/storage.objectViewer: allUsers,Yes
