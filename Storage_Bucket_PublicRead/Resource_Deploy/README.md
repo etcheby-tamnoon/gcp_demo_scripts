@@ -1,161 +1,188 @@
-# GCP Storage Bucket - Public Read Anonymous Access 
+# GCP Storage Bucket - Public Read Anonymous Access - Script
+![Tool Logo](images/Tamnoon.png)
 
-This Python script allows you to create a publicly accessible Google Cloud Platform (GCP) with role IAM
-binding below: 
-```json
-{
-  "role": "roles/storage.objectViewer",
-  "members": [
-    "allUsers"
-  ]
-}
-```
+## Overview
 
-Script specifically grants one bucket-level permission `roles/storage.objectViewer` to everyone on the internet `(allUsers)`, making all read requests anonymous.  
-Per GCP Documentation, Storage Bucket Public Access also applies to anyone signed into a Google account `(allAuthenticatedUsers)` if listed as member on the bucket role IAM binding. 
+This script automates the creation of Google Cloud Platform (GCP) storage buckets with public read access. It offers robust logging, detailed debugging, and seamless handling of authentication options. The script aligns with cloud-native security principles, helping mitigate issues related to publicly exposed buckets.
 
-(https://cloud.google.com/storage/docs/cloud-console?_gl=1*10s4kvs*_ga*OTU0ODMwNDA1LjE3MzU1NzU5MDE.*_ga_WH2QY8WWF5*MTczNzE3MDA2Ni4yOC4xLjE3MzcxNzI0NTIuNTAuMC4w#_sharingdata)
+### Key Features
 
-Storage Bucket with two modes of operation:
-
-1. **Direct Creation via GCP User OAuth**
-2. **Separation of Duties**: GCP User retrieves Service Account key JSON from Secret Manager, and code uses it to perform bucket operations.
+- Supports two authentication methods:
+  - GCP User OAuth
+  - Service Account Key retrieved from Secret Manager
+- Configurable via command-line arguments (`--bucket-name`, `--project-id`, `--secret-name`, and `--debug`).
+- Detailed debug logs and error handling for common GCP-related exceptions.
+- Aligns with CNAPP framework mappings, specifically targeting Wiz Issue `wc-id-29` (Publicly exposed bucket (allows read access to all users).
 
 ---
 
-## Prerequisites
+## What the Script Does
 
-### Install Required Libraries
-Ensure the following Python libraries are installed:
-```bash
-pip3 install -r requirements.txt
-```
+This script:
 
-### Python Version
-This script requires **Python 3.9 or higher**. Check your Python version with:
-```bash
-python3 --version
-```
-If needed, [download and install Python](https://www.python.org/downloads/).
+1. Authenticates with GCP using OAuth or a Service Account Key.
 
-### Configure GCP Authentication
-- **For GCP User OAuth**: 
-Ensure the `gcloud` CLI is installed and configured.
+2. Creates a GCP storage bucket with the specified name in the given project.
+
+3. Sets public read access to the bucket by explicitly granting the following permission:
+
+   ```json
+   {
+     "role": "roles/storage.objectViewer",
+     "members": [
+       "allUsers"
+     ]
+   }
+   ```
+
+   This grants the `roles/storage.objectViewer` role to everyone on the internet (`allUsers`), making all read requests anonymous.
+
+   > **Note:** According to GCP documentation, public access also applies to anyone signed into a Google account (`allAuthenticatedUsers`) if they are listed as a member on the bucket role IAM binding. Refer to the [official documentation](https://cloud.google.com/storage/docs/cloud-console?_gl=1*10s4kvs*_ga*OTU0ODMwNDA1LjE3MzU1NzU5MDE.*_ga_WH2QY8WWF5*MTczNzE3MDA2Ni4yOC4xLjE3MzcxNzI0NTIuNTAuMC4w#_sharingdata) for more details.
+
+4. Provides a public URL for easy access to the bucket.
+
+The script addresses the `Publicly Exposed Bucket` issue (Wiz Graph Control ID: `wc-id-29`) by explicitly granting read access only when configured.
+
+---
+
+## How to Run the Script
+
+### Prerequisites
+
+- Install the following Python libraries:
   ```bash
-  gcloud auth application-default login
-  ```
-- **Separation of Duties**: 
-Ensure Service Account JSON key is stored securely in [GCP Secret Manager](https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets).
+  pip3 install -r requirements.txt```
+- Ensure `gcloud` CLI is installed and configured.
+- Python 3.7 or higher.
+- Necessary GCP IAM permissions (refer to [Custom IAM Role](#custom-iam-role)).
 
-### Required IAM Permissions
+### Authentication Options
 
-#### **Option 1: Direct Creation via GCP User OAuth**
-The user account must have the following granular permissions:
-- **Storage Bucket Permissions**:
-  - `storage.buckets.create`: To create buckets.
-  - `storage.buckets.get`: To check bucket existence.
-  - `storage.buckets.getIamPolicy`: To fetch bucket IAM policies.
-  - `storage.buckets.setIamPolicy`: To set bucket IAM policies.
-- **Recommended Predefined Role**: Assign `roles/storage.admin`.
+#### Option 1: GCP User OAuth Authentication
 
-If accessing secrets from Secret Manager:
-- **Secret Manager Permissions**:
-  - `secretmanager.secrets.get`: To access the secret.
-  - `secretmanager.versions.access`: To retrieve the secret version.
-- **Recommended Predefined Role**: Assign `roles/secretmanager.secretAccessor`.
+1. Select `Option 1` when prompted.
+2. The script uses your existing GCP User OAuth credentials to authenticate and perform bucket operations.
+3. Example command:
+   ```bash
+   python3 gcpstoragebucket_publicread.py --bucket-name <bucket-name> --project-id <project-id> --debug
+   ```
 
-#### **Option 2: Separation of Duties**
-- **For GCP User (to access Secret Manager)**:
-  - `secretmanager.secrets.get`: To access the secret.
-  - `secretmanager.versions.access`: To retrieve the secret version.
-  - **Recommended Predefined Role**: Assign `roles/secretmanager.secretAccessor`.
+![Tool Logo](images/deploy1.png)
 
-- **For Service Account (to manage Storage Bucket)**:
-  - `storage.buckets.create`: To create buckets.
-  - `storage.buckets.get`: To check bucket existence.
-  - `storage.buckets.getIamPolicy`: To fetch bucket IAM policies.
-  - `storage.buckets.setIamPolicy`: To set bucket IAM policies.
-  - **Recommended Predefined Role**: Assign `roles/storage.admin`.
+#### Option 2: Service Account Key via Secret Manager
+
+1. Select `Option 2` when prompted.
+2. The script retrieves the service account key from GCP Secret Manager.
+3. Set the `--secret-name` argument to specify the secret containing the key.
+4. Example command:
+   ```bash
+   python3 gcpstoragebucket_publicread.py --bucket-name <bucket-name> --project-id <project-id> --secret-name <secret-name>
+   ```
+![Tool Logo](images/deploy1.png)
 
 ---
 
-## Usage Instructions
+## Command-Line Help Menu
 
-### Step 1: Clone or Download the Script
-Save the script to a local directory.
+Run the script with the `--help` flag to view all available options:
 
-### Step 2: Execute the Script
-Run the script using Python:
 ```bash
-python3 <script_name>.py
+python3 gcpstoragebucket_publicread.py --help
 ```
 
-### Step 3: Follow the Prompts
-The script will prompt you to choose one of the following options:
+Example output:
 
-#### **Option 1: Direct Bucket Creation via GCP User OAuth**
-1. Select option `1`.
-2. Enter the desired bucket name and project ID.
-3. The script will directly use your GCP User OAuth credentials to create the bucket and set its IAM policy.
+```plaintext
+usage: gcpstoragebucket_publicread.py [-h] [--bucket-name BUCKET_NAME]
+                                      [--project-id PROJECT_ID]
+                                      [--secret-name SECRET_NAME]
+                                      [--debug]
 
-#### **Option 2: Separation of Duties**
-1. Select option `2`.
-2. Enter the name of the secret in Secret Manager that stores the Service Account key JSON.
-3. The script will:
-   - Use GCP User OAuth to fetch the secret.
-   - Use the retrieved Service Account key JSON to create the bucket and set its IAM policy.
+Create a GCP Storage bucket with public access.
 
----
-
-## Script Features
-
-### Error Handling
-- **Permissions**: Detects missing IAM roles (e.g., `roles/storage.admin`, `roles/secretmanager.secretAccessor`) and provides actionable error messages.
-- **Authentication**: Prompts for `gcloud` authentication if necessary.
-- **Conflict**: Handles bucket name conflicts gracefully.
-
-### Cleanup
-- Deletes temporary files (e.g., Service Account key JSON) after execution.
-
----
-
-## Example Output
-
-**Execution Example:**
-```text
-Select your Google Cloud authentication method:
-1. GCP User OAuth authenticates and has permissions to directly create the GCP Storage Bucket.
-2. Separation of duties - GCP User OAuth authenticates to retrieve the Secret Manager secret, and the script will use the service account key JSON (secret) to create the storage bucket and its policy IAM binding.
-Enter 1 or 2: 1
-
-Enter the desired bucket name: my-public-bucket
-Enter your GCP project ID: my-gcp-project
-Bucket my-public-bucket created.
-Public read access granted to bucket my-public-bucket.
-Bucket my-public-bucket is now publicly accessible.
-Public URL: https://storage.googleapis.com/my-public-bucket/
+optional arguments:
+  -h, --help            Show this help message and exit
+  --bucket-name BUCKET_NAME
+                        Name of the GCP Storage bucket to create.
+  --project-id PROJECT_ID
+                        GCP project ID where the bucket will be created.
+  --secret-name SECRET_NAME
+                        Name of the Secret Manager secret containing service
+                        account key.
+  --debug               Enable debug logging.
 ```
 
+
+
 ---
 
-## Notes
-- **Security**: Avoid hardcoding secrets. Use GCP Secret Manager for secure secret storage.
-- **IAM Best Practices**: Assign minimal permissions necessary for each role.
+## Custom IAM Role
 
+To minimize permissions while ensuring the script functions as intended, create a custom IAM role with the following permissions:
+
+### Required Permissions
+
+#### For Bucket Operations
+
+- `storage.buckets.create`
+- `storage.buckets.get`
+- `storage.buckets.setIamPolicy`
+- `storage.objects.create`
+- `storage.objects.get`
+- `storage.objects.list`
+
+#### For Secret Manager Access (if using Option 2)
+
+- `secretmanager.secrets.get`
+- `secretmanager.versions.access`
+
+### Example Custom Role Creation
+
+1. Save the following JSON to a file (e.g., `custom_role.json`):
+   ```json
+   {
+       "title": "CustomBucketCreatorRole",
+       "description": "Custom role for creating and managing GCP storage buckets.",
+       "stage": "GA",
+       "includedPermissions": [
+           "storage.buckets.create",
+           "storage.buckets.get",
+           "storage.buckets.setIamPolicy",
+           "storage.objects.create",
+           "storage.objects.get",
+           "storage.objects.list",
+           "secretmanager.secrets.get",
+           "secretmanager.versions.access"
+       ]
+   }
+   ```
+2. Create the role using `gcloud`:
+   ```bash
+   gcloud iam roles create CustomBucketCreatorRole --project=<project-id> --file=custom_role.json
+   ```
+
+---
+
+## Debug Logging
+
+Enable debug mode using the `--debug` flag to see detailed logs for each operation. Example:
+
+```bash
+python3 gcpstoragebucket_publicread.py --bucket-name <bucket-name> --project-id <project-id> --debug
+```
+![Tool Logo](images/deploy_debug.png)
 ---
 
 ## Troubleshooting
 
-### Missing `gcloud` CLI
-If you encounter an error related to `gcloud`, install it:
-```bash
-https://cloud.google.com/sdk/docs/install
-```
+- **Bucket Already Exists**: Ensure the bucket name is globally unique.
+- **403 Permission Denied**: Verify that your account has the necessary IAM roles.
+- **gcloud Not Installed**: Install the [Google Cloud SDK](https://cloud.google.com/sdk/docs/install).
 
-### Permission Errors
-If you encounter permission errors, ensure the user or service account has the necessary permissions listed in the [Prerequisites](#prerequisites) section. Check the assigned roles and policies using:
-```bash
-gcloud projects get-iam-policy <PROJECT_ID>
-```
+---
+
+## Contributing
+
+Contributions and feedback are welcome! Submit a pull request or open an issue to improve the script.
 
 ---
