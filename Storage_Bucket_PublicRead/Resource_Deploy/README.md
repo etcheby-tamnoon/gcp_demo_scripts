@@ -78,7 +78,7 @@ The script addresses the `Publicly Exposed Bucket` issue (Wiz Graph Control ID: 
    ```bash
    python3 gcpstoragebucket_publicread.py --bucket-name <bucket-name> --project-id <project-id> --secret-name <secret-name>
    ```
-![Tool Logo](images/deploy1.png)
+![Tool Logo](images/deploy2.png)
 
 ---
 
